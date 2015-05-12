@@ -5,7 +5,7 @@
  *
  * @class   Ext.ux.plugin.ContainerStoreProgress
  * @extends Ext.util.Observable
- * @author  Yinka Kunle <yinka@genericsweb.com>
+ * @author  Yinka Kunle
  * @created 12-May-2015
  */
 
