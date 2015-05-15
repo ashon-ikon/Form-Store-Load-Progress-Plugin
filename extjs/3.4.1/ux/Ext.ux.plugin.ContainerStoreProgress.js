@@ -24,7 +24,7 @@ Ext.ux.plugin.ContainerStoreProgressObject = function(config) {
         width            : 300,
         progress         : true,
         closable         : false,
-        animEl           : 'mb6'
+        animEl           : 'elId'
     });
 
     Ext.apply(this, config);
@@ -48,14 +48,26 @@ Ext.ux.plugin.ContainerStoreProgress = Ext.extend(
         this.addEvents(
             /**
              * @event afterloadfake
-             * Fires after fake INN Group has been queried
-             * @param {Ext.ux.form.ComboBoxInnGroup} combo This combo box
+             * Fires whenever any attached store emits 'beforeload' event
+             * @param {Ext.ux.plugin.ContainerStoreProgress} combo This container
+             * @param {Number} total Total number of stores attached to container
+             * @param {Number} completed Current number of finished stores
              */
             'startprogress',
             /**
+             * @event progressupdate
+             * Fires whenever any attached store emits 'load' (finished load) event
+             * @param {Ext.ux.plugin.ContainerStoreProgress} combo This container
+             * @param {Number} total Total number of stores attached to container
+             * @param {Number} completed Current number of finished stores
+             */
+            'progressupdate',
+            /**
              * @event endprogress
-             * Fires before fake INN Group has been queried
-             * @param {Ext.ux.form.ComboBoxInnGroup} combo This combo box
+             * Fires when all attached stores have emitted 'beforeload',
+             * and subsequently 'load' event each
+             * @param {Ext.ux.plugin.ContainerStoreProgress} combo This container
+             * @param {Number} total Total number of stores attached to container
              */
             'endprogress'
         );
@@ -116,18 +128,17 @@ Ext.ux.plugin.ContainerStoreProgress = Ext.extend(
             if (undefined !== item.store || (typeof item.getStore === 'function')) {
                 var name = item.getName(), store = item.store || item.getStore();
                 // We'll use this to set up the size. Do not remove of progress
-                oThis.watchList[name] = {};
-                oThis.watchList[name]['active'] = true;
+                this.watchList[name] = {};
                 // Subscript to the before load
                 store.on('beforeload', function () {
-                    oThis.watchList[name]['state'] = oThis.STATE_LOADING;
-                    oThis.checkStoreStates();
-                });
+                    this.watchList[name]['state'] = oThis.STATE_LOADING;
+                    this.checkStoreStates();
+                }, this);
                 // Subscript to the after load
                 store.on('load', function () {
-                    oThis.watchList[name]['state'] = oThis.STATE_DONE;
-                    oThis.checkStoreStates();
-                });
+                    this.watchList[name]['state'] = oThis.STATE_DONE;
+                    this.checkStoreStates();
+                }, this);
             }
         }
     },
@@ -137,37 +148,35 @@ Ext.ux.plugin.ContainerStoreProgress = Ext.extend(
     checkStoreStates : function () {
         var total = 0, completed = 0;
         for (var name in this.watchList) {
-            var ele = this.watchList[name];
-            if (undefined !== ele.state) {
-                // Count...
-                total++;
-                // On increment if element is done
-                completed = (this.STATE_DONE !== ele.state ? completed : (completed + 1));
+            if (this.watchList.hasOwnProperty(name)) {
+                var ele = this.watchList[name];
+                if (undefined !== ele.state) {
+                    // Count...
+                    total++;
+                    // On increment if element is done
+                    completed = (this.STATE_DONE !== ele.state ? completed : (completed + 1));
+                }
             }
         };
 
         if (total > 0) {
             // Show or hide the progress bar
             if (!this.progressOn) {
-                this.onStartProgress(total, completed);
                 this.progressOn = true;
-                this.startProgress();
+                this.onStartProgress(total, completed);
             }
 
             if (this.progressOn) {
-                var p = (completed + 1) / (total + 1); // Adding 1 to both sides to correct zero offset
-                Ext.MessageBox.updateProgress(p, Math.round(p * 100) + '% ' +  this.completenessText);
+                this.onUpdateProgress(total, completed);
             }
 
             if (completed === total && this.progressOn) {
-                // Wait a little while before triggering
-                    setTimeout(function() {
-                        Ext.MessageBox.hide();
-                    }, 200);
-
                 this.progressOn = false;
-
-                this.onEndProgress(total);
+                var oThis       = this;
+                // Wait a little while before triggering
+                setTimeout(function() {
+                    oThis.onEndProgress(total);
+                }, 200);
             }
         }
 
@@ -178,7 +187,7 @@ Ext.ux.plugin.ContainerStoreProgress = Ext.extend(
      * Shows the progress bar
      * @returns {undefined}
      */
-    startProgress : function () {
+    onStartProgress : function(total, completed) {
         Ext.MessageBox.show({
            title        : this.title,
            msg          : this.message,
@@ -188,14 +197,19 @@ Ext.ux.plugin.ContainerStoreProgress = Ext.extend(
            closable     : this.closable,
            animEl       : this.animEl
        });
-    },
 
-
-    onStartProgress : function(total, completed) {
         this.fireEvent('startprogress', this, total, completed);
     },
 
+
+    onUpdateProgress : function(total, completed) {
+        var p = (completed + 1) / (total + 1); // Adding 1 to both sides to correct zero offset
+        Ext.MessageBox.updateProgress(p, Math.round(p * 100) + '% ' +  this.completenessText);
+        this.fireEvent('progressupdate', this, total, completed);
+    },
+
     onEndProgress : function(total) {
+        Ext.MessageBox.hide();
         this.fireEvent('endprogress', this, total);
     }
 
